@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <title>Bubble Chart</title>
+    <meta name="description" content="">
+    <meta name="keywords" content="">
+    <link href="" rel="stylesheet">
+    <style type="text/css">
+    .axis path, .axis line {
+        fill: none;
+        stroke: #000;
+        shape-rendering: crispEdges;
+    }
+    text {
+        font-family: sans-serif;
+        font-size: 12px;
+    }
+    .circles {
+        opacity: 0.6;
+    }
+    </style>
+    <script src="http://d3js.org/d3.v3.min.js" charset="utf-8" type="text/javascript"></script>
+</head>
+
+<body>
+    <div id="chart"></div>
+    <div id="legend"></div>
+</body>
+
+<script type="text/javascript">
+var margin = {
+    top: 30,
+    right: 250,
+    bottom: 40,
+    left: 70
+},
+    w = 900 - margin.left - margin.right,
+    h = 500 - margin.top - margin.bottom;
+
+var svg = d3.select("#chart")
+    .append("svg")
+    .attr("width", w + margin.left + margin.right)
+    .attr("height", h + margin.top + margin.bottom)
+    .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+var formatPercentage = d3.format(".2%");
+var formatDollars = d3.format("$,.2r");
+var formatVelocity = d3.format(".3r");
+
+var x = d3.scale.linear()
+    .range([0, w]),
+    y = d3.scale.linear()
+        .range([h, 0]);
+
+var xAxis = d3.svg.axis()
+    .scale(x)
+    .orient("bottom"),
+
+    yAxis = d3.svg.axis()
+        .scale(y)
+        .tickFormat(formatPercentage)
+        .orient("left");
+
+var r = d3.scale.linear()
+    .range([4, 20]);
+
+var colours = d3.scale.category10();
+
+
+d3.csv("data.csv", function(error, data) {
+
+    var channelNames = [];
+
+    data.forEach(function(d, i) {
+        channelNames[i] = d.Channel;
+
+        d.Velocity = +d.Velocity;
+        d.Conversion = +d.Conversion / 100;
+        d.Value = +d.Value;
+    });
+
+    var xDomain = [0, d3.max(data, function(d, i) {
+        return +d.Velocity;
+    })],
+        yDomain = [0, d3.max(data, function(d, i) {
+            return +d.Conversion;
+        })],
+        rDomain = d3.extent(data, function(d, i) {
+            return +d.Value;
+        });
+
+    x.domain(xDomain);
+    y.domain(yDomain);
+    r.domain(rDomain);
+
+    var pointsContainer = svg.append("g");
+
+    var points = pointsContainer.selectAll("circles")
+        .data(data);
+
+    points.enter()
+        .append("circle")
+        .attr("class", "circles")
+        .attr("id", function(d, i) {
+            return spliter(d.Channel);
+        })
+        .attr("r", function(d, i) {
+            return r(+d.Value);
+        })
+        .attr("cx", function(d, i) {
+            return x(+d.Velocity);
+        })
+        .attr("cy", function(d, i) {
+            return y(+d.Conversion);
+        })
+        .style("fill", function(d, i) {
+            return colours(i);
+        })
+        .append("title")
+        .text(function(d, i) {
+            return "Channel: " + d.Channel + ", Velocity: " + formatVelocity(d.Velocity) + ", Conversion Rate: " + formatPercentage(d.Conversion) + ", Value: " + formatDollars(d.Value);
+        });
+
+    svg.append("g")
+        .attr("class", "x axis")
+        .attr("transform", "translate(0," + h + ")")
+        .call(xAxis)
+        .append("text")
+        .attr("y", 25)
+        .attr("dy", ".71em")
+        .attr("x", w / 2)
+        .style("text-anchor", "middle")
+        .text("Velocity");
+
+    svg.append("g")
+        .attr("class", "y axis")
+        .call(yAxis)
+        .append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -h / 2)
+        .attr("dy", ".71em")
+        .attr("y", -55)
+        .style("text-anchor", "middle")
+        .text("Conversion Rate");
+
+    var lExtents = legendCircles(rDomain);
+
+    svg.append("g")
+        .selectAll("lCircles")
+        .data(lExtents)
+        .enter()
+        .append("circle")
+        .attr("class", "circles")
+        .attr("r", function(d, i) {
+            return d.radius;
+        })
+        .attr("cx", (w + 100))
+        .attr("cy", function(d, i) {
+            if (i > 0) {
+                return legendSpacing(i, lExtents) + i * 5;
+            } else {
+                return 10;
+            }
+        })
+        .style("fill", "grey");
+
+    svg.append("g")
+        .selectAll("text")
+        .data(lExtents)
+        .enter()
+        .append("text")
+        .text(function(d, i) {
+            return formatDollars(d.price);
+        })
+        .attr("x", (w + 130))
+        .attr("y", function(d, i) {
+            if (i > 0) {
+                return legendSpacing(i, lExtents) + i * 5;
+            } else {
+                return 10;
+            }
+        })
+        .attr("dy", 5);
+
+    svg.append("g")
+        .selectAll("cCircles")
+        .data(channelNames).enter()
+        .append("circle")
+        .attr("class", "circles")
+        .attr("r", "5px")
+        .attr("cx", (w + 100))
+        .attr("cy", function(d, i) {
+            return i * 20 + 200;
+        })
+        .style("fill", function(d, i) {
+            return colours(i);
+        })
+        .on("mouseover", function(d, i) {
+            console.log(d);
+            highlight(spliter(d));
+        })
+        .on("mouseout", function(d, i) {
+            unhighlight(spliter(d));
+        });
+
+    svg.append("g")
+        .selectAll("text")
+        .data(channelNames).enter()
+        .append("text")
+        .text(function(d, i) {
+            return channelNames[i];
+        })
+        .attr("x", (w + 115))
+        .attr("y", function(d, i) {
+            return i * 20 + 200;
+        })
+        .attr("dy", 5)
+        .on("mouseover", function(d, i) {
+            console.log(d);
+            highlight(spliter(d));
+        })
+        .on("mouseout", function(d, i) {
+            unhighlight(spliter(d));
+        });
+
+    function legendCircles(x) {
+        var range = (x[1] - x[0]);
+        var returner = [];
+
+        for (var i = 0; i < 5; i++) {
+            var el = x[1] - i * (range / 4);
+            returner[i] = {
+                radius: r(el),
+                price: el
+            }
+        };
+
+        return returner;
+    }
+
+    function legendSpacing(x, y) {
+        var sum = 0;
+        for (var i = 0; i <= x; i++) {
+            sum = (sum + y[i].radius);
+        };
+        return 2 * sum - y[i - 1].radius - 10;
+    }
+
+    function highlight(x) {
+        console.log(x)
+        d3.select("#" + x)
+            .style("opacity", 1.0);
+    }
+
+    function unhighlight(x) {
+        console.log(x)
+        d3.select("#" + x)
+            .style("opacity", 0.6);
+    }
+
+    function spliter(x) {
+        var temp = x.split(" ");
+        return temp[0];
+    }
+})
+</script>
+
+</html>
